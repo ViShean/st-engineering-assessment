@@ -1,0 +1,47 @@
+services:
+  frontend:
+    build: ./frontend
+    ports:
+      - "5173:5173" 
+    networks:
+      - app-network
+
+  backend:
+    build: ./backend
+    ports:
+      - "3001:3001"
+    depends_on:
+      db:
+        condition: service_healthy
+    env_file:
+      - .env
+    environment:
+      - DATABASE_URL=postgres://${DB_USER}:${DB_PASSWORD}@db:5432/${DB_NAME}
+    networks:
+      - app-network
+
+  db:
+    image: postgres:15-alpine
+    environment:
+      - POSTGRES_USER=${DB_USER}
+      - POSTGRES_PASSWORD=${DB_PASSWORD}
+      - POSTGRES_DB=${DB_NAME}
+    healthcheck:
+      test: ["CMD-SHELL", "pg_isready -U ${DB_USER} -d ${DB_NAME}"]
+      interval: 5s
+      timeout: 5s
+      retries: 5
+    ports:
+      - "5432:5432"
+    volumes:
+      - postgres_data:/var/lib/postgresql/data
+    networks:
+      - app-network
+
+networks:
+  app-network:
+    driver: bridge
+    
+
+volumes:
+  postgres_data:

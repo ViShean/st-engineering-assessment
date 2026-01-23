@@ -1,0 +1,7 @@
+# this prevents local node_modules from being copied into the container, which would cause errors and make the build very slow.
+
+node_modules
+dist
+.env
+.git
+npm-debug.log
