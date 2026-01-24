@@ -1,4 +1,4 @@
-import {pgTable, serial, integer, text, timestamp} from 'drizzle-orm/pg-core';
+import {pgTable, serial, integer, text, timestamp, varchar} from 'drizzle-orm/pg-core';
 
 export const comments = pgTable("comments", {
     id: serial("id").primaryKey(),
@@ -8,4 +8,9 @@ export const comments = pgTable("comments", {
     email: text("email"),
     body: text("body"),
     uploadedAt: timestamp("uploaded_at").defaultNow(),
+});
+
+export const metadata = pgTable('metadata', {
+  key: varchar('key', { length: 50 }).primaryKey(),
+  value: integer('value').notNull().default(0),
 });

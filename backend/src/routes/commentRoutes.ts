@@ -6,6 +6,7 @@ const router = Router();
 
 router.post('/upload', upload.single('file'), commentController.handleUpload);
 router.get('/', commentController.getComments);
+router.get('/status/:jobId', commentController.streamProgress);
 router.delete('/reset', commentController.resetDatabase);
 
 export default router;

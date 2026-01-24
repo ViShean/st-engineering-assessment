@@ -8,7 +8,7 @@
     "dev": "npm run db:push && tsx watch src/app.ts",
     "build": "tsc",
     "start": "node dist/app.js",
-    "db:push": "drizzle-kit push"
+    "db:push": "drizzle-kit push --force"
   },
   "keywords": [],
   "author": "",
