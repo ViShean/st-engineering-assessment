@@ -32,8 +32,10 @@ docker compose up --build
 
 ## Running Tests
 
+To run the backend tests and generate a coverage report, use:
+
 ```bash
-docker compose --profile test run --rm backend-test
+docker compose --profile test run --rm backend-test npm run test:cov
 ```
 
 ## Stopping the Application
