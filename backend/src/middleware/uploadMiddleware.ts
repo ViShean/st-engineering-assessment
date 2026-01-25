@@ -1,7 +1,16 @@
 import multer from 'multer';
 import path from 'path';
 
-
+const ALLOWED_MIMES = [
+  'text/csv',
+  'application/vnd.ms-excel',
+  'text/comma-separated-values',
+  'application/csv'
+];
+export const validateFile = (originalname: string, mimetype: string) => {
+  const ext = path.extname(originalname || '').toLowerCase();
+  return ext === '.csv' && ALLOWED_MIMES.includes(mimetype);
+};
 export const upload = multer({
     dest: 'uploads/',
     limits: {
@@ -9,18 +18,10 @@ export const upload = multer({
         files: 1,                 // allow 1 file per request
     },
     fileFilter: (req, file, cb) => {
-        const ext = path.extname(file.originalname).toLowerCase();
-        const mimetype = file.mimetype;
-        const allowedMimes = [
-                    'text/csv', 
-                    'application/vnd.ms-excel', 
-                    'text/comma-separated-values',
-                    'application/csv'
-                ];
-    if (ext === '.csv' && allowedMimes.includes(mimetype)) {
-        cb(null, true);
+    if (validateFile(file.originalname, file.mimetype)) {
+    cb(null, true);
     } else {
-        cb(new Error('Invalid file type. Only .csv is allowed.'));
+    cb(new Error('Invalid file type. Only .csv is allowed.'));
     }
-    }
+}
 });

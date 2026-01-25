@@ -9,6 +9,7 @@ import { API_BASE_URL } from "../config";
 export const LandingScreen = () => {
   const navigate = useNavigate();
   const [result, setResult] = useState<UploadResult | null>(null);
+  const [error, setError] = useState<string | null>(null);
   const [isModalOpen, setIsModalOpen] = useState(false);
   const [loading, setLoading] = useState(false);
   const [uploadProgress, setUploadProgress] = useState(0);
@@ -127,9 +128,16 @@ export const LandingScreen = () => {
         jobId,
       );
       setResult(uploadResult.results);
+      setError(null);
       setIsModalOpen(true);
-    } catch {
-      alert("Upload failed. Check console for details.");
+    } catch (err: any) {
+      const errorMessage =
+        err?.response?.data?.error ||
+        err?.message ||
+        "Upload failed. Please try again.";
+      setError(errorMessage);
+      setResult(null);
+      setIsModalOpen(true);
     } finally {
       setLoading(false);
       sse.close();
@@ -139,6 +147,7 @@ export const LandingScreen = () => {
   const handleCloseModal = () => {
     setIsModalOpen(false);
     setResult(null);
+    setError(null);
     setUploadProgress(0);
     setProcessProgress(0);
   };
@@ -181,8 +190,36 @@ export const LandingScreen = () => {
       <Modal
         isOpen={isModalOpen}
         onClose={handleCloseModal}
-        title="Upload Complete"
+        title={error ? "Upload Failed" : "Upload Complete"}
       >
+        {error && (
+          <div>
+            <div className="flex items-center gap-3 p-4 bg-red-50 border border-red-200 rounded-lg">
+              <svg
+                className="w-6 h-6 text-red-500 flex-shrink-0"
+                fill="none"
+                viewBox="0 0 24 24"
+                stroke="currentColor"
+              >
+                <path
+                  strokeLinecap="round"
+                  strokeLinejoin="round"
+                  strokeWidth={2}
+                  d="M12 8v4m0 4h.01M21 12a9 9 0 11-18 0 9 9 0 0118 0z"
+                />
+              </svg>
+              <p className="text-red-700 font-medium">{error}</p>
+            </div>
+            <div className="mt-6 flex justify-end">
+              <button
+                onClick={handleCloseModal}
+                className="px-4 py-2 rounded-md text-sm font-medium border border-slate-300 bg-white text-slate-600 hover:bg-slate-50 transition-colors"
+              >
+                Close
+              </button>
+            </div>
+          </div>
+        )}
         {result && (
           <div>
             <div className="flex gap-6 mt-3 text-slate-600">

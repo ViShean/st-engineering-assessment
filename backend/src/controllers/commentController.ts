@@ -1,5 +1,5 @@
 import { Request, Response, NextFunction } from 'express';
-import * as commentService from '../services/commentService.js';
+import * as commentService from '../services/dataService.js';
 import fs from 'fs';
 import { promises as fsPromises } from 'fs';
 import { getProgress, clearProgressLater } from '../services/progressStore.js';

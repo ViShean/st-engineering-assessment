@@ -1,4 +1,4 @@
-FROM node:20-alpine
+FROM node:20-alpine AS base
 
 WORKDIR /app
 
@@ -9,8 +9,11 @@ RUN npm install
 # Copy the rest of the application code
 COPY . .
 
-# Backend standard port
+# Development/Production stage
+FROM base AS dev
 EXPOSE 3001
-
-# Start command
 CMD ["npm", "run", "dev"]
+
+# Test stage
+FROM base AS test
+CMD ["npm", "test"]

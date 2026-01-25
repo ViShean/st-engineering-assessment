@@ -9,7 +9,9 @@ services:
       - app-network
 
   backend:
-    build: ./backend
+    build:
+      context: ./backend
+      target: dev
     ports:
       - "3001:3001"
     depends_on:
@@ -19,6 +21,15 @@ services:
       - .env
     environment:
       - DATABASE_URL=postgres://${DB_USER}:${DB_PASSWORD}@db:5432/${DB_NAME}
+    networks:
+      - app-network
+
+  backend-test:
+    build:
+      context: ./backend
+      target: test
+    profiles:
+      - test
     networks:
       - app-network
 
