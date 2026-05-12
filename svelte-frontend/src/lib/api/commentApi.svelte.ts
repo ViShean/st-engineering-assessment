@@ -25,11 +25,12 @@ export const uploadCsv = async (
 ): Promise<unknown> => {
   const formData = new FormData();
   formData.append("file", file);
+  if (jobId) formData.append("jobId", jobId);
 
   // Native fetch doesn't support progress — use XMLHttpRequest for that
   return new Promise((resolve, reject) => {
     const xhr = new XMLHttpRequest();
-    const url = `${API_BASE_URL}/upload${jobId ? `?jobId=${jobId}` : ""}`;
+    const url = `${API_BASE_URL}/upload`;
 
     xhr.upload.onprogress = (evt) => {
       if (evt.lengthComputable) {
@@ -39,7 +40,20 @@ export const uploadCsv = async (
       }
     };
 
-    xhr.onload = () => resolve(JSON.parse(xhr.responseText));
+    xhr.onload = () => {
+      if (xhr.status >= 200 && xhr.status < 600) {
+        try {
+          const body = JSON.parse(xhr.responseText);
+          if (xhr.status >= 400) {
+            reject(new Error(body.message || "Upload failed"));
+          } else {
+            resolve(body);
+          }
+        } catch {
+          reject(new Error("Upload failed"));
+        }
+      }
+    };
     xhr.onerror = () => reject(new Error("Upload failed"));
     xhr.open("POST", url);
     xhr.send(formData);

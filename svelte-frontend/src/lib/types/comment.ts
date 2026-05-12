@@ -1,6 +1,6 @@
 export interface Comment {
     rowNumber: number; 
-    comment_id: number;
+    commentId: number;
     postId: number;
     name: string;
     email: string;

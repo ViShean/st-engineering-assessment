@@ -1,3 +1,77 @@
+<script lang="ts">
+  import {createComments} from '$lib/runes/comments.svelte';
+  import {createDebounce} from '$lib/runes/debounce.svelte';
+  import Table from '../../components/dataView/Table.svelte';
+  import MultiSelect from '../../components/dataView/MultiSelect.svelte';
+  import { page } from '$app/state';
+  import { goto } from '$app/navigation';
+
+  const searchableColumns = ["name", "email", "body"];
+  let params = page.url.searchParams;
+  let searchTerm = $state(params.get('q') ?? '');
+  let selectedColumns = $state<string[]>(
+    params.get('cols')?.split(',') ?? [...searchableColumns]
+  );
+
+  let debouncedSearchTerm = createDebounce(() => searchTerm, 500);
+
+  // Pagination state — must be $derived so goTo() triggers a re-fetch
+  const cleanedPage = $derived.by(() => {
+    const p = Number(page.url.searchParams.get("page") || "1");
+    return Number.isFinite(p) && p > 0 ? p : 1;
+  });
+
+  $effect(() => {
+    const newParams = new URLSearchParams();
+    if (debouncedSearchTerm.value) newParams.set('q', debouncedSearchTerm.value);
+    if (selectedColumns.length !== searchableColumns.length) newParams.set('cols', selectedColumns.join(','));
+    goto(`?${newParams.toString()}`, { replaceState: true, noScroll: true });
+  });
+
+  const results = createComments(
+    () => cleanedPage,
+    () => debouncedSearchTerm.value,
+    () => selectedColumns
+  );
+
+  const btnBase =
+    "inline-flex items-center justify-center min-w-[40px] h-[40px] text-base font-semibold transition-all duration-200 rounded-lg focus:outline-none focus-visible:ring-2 focus-visible:ring-indigo-400 focus-visible:ring-offset-2";
+
+  const btnInactive =
+    "bg-white border border-slate-200 text-slate-600 hover:border-slate-300 hover:text-slate-800";
+
+  const btnActive =
+    "bg-transparent text-indigo-600 border-2 border-indigo-500 shadow-lg shadow-indigo-500/30 font-extrabold";
+
+  const btnDisabled =
+    "opacity-40 cursor-not-allowed bg-transparent text-slate-400";
+
+  const arrowBtn = "px-4"; 
+
+  const current = $derived(results.meta?.currentPage ?? cleanedPage);
+  const total = $derived(results.meta?.totalPages ?? 1);
+  const canPrev = $derived(current > 1);
+  const canNext = $derived(current < total);
+
+  const goTo = (p: number) => {
+    const newParams = new URLSearchParams(page.url.searchParams);
+    newParams.set('page', p.toString());
+    goto(`?${newParams.toString()}`, { replaceState: true, noScroll: true });
+  };
+
+  const windowSize =5;
+  let paginationPages = $derived.by(() => {
+    let start = Math.max(1, current - Math.floor(windowSize / 2));
+    const end = Math.min(total, start + windowSize - 1);
+    if (end === total) start = Math.max(1, total - windowSize + 1);
+    return {
+      start,
+      end,
+      pages: Array.from({ length: end - start + 1 }, (_, i) => start + i)
+    };
+  });
+</script>
+
 <div class="mx-auto max-w-7xl px-6 py-12">
 
   <!-- Header -->
@@ -8,7 +82,9 @@
           Database <span class="text-indigo-600">View</span>
         </h1>
         <p class="text-slate-500 font-medium">
-          Managed data: <span class="font-semibold text-slate-700">500</span> records found
+          Managed data: <span class="font-semibold text-slate-700">
+            {results?.meta?.totalCount ?? 0}
+          </span> records found
         </p>
       </div>
       <a
@@ -26,6 +102,7 @@
           <input
             type="text"
             placeholder="Search for comments..."
+            bind:value={searchTerm}
             class="w-full h-full pl-10 pr-4 py-2 border border-slate-200 rounded-lg shadow-sm focus:outline-none focus-visible:ring-2 focus-visible:ring-indigo-400"
           />
           <svg
@@ -38,179 +115,69 @@
             <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M21 21l-6-6m2-5a7 7 0 11-14 0 7 7 0 0114 0z" />
           </svg>
         </div>
-
-        <!-- Column multi-select (static) -->
-        <div class="relative w-full">
-          <button class="flex items-center justify-between w-full px-4 py-2 text-left bg-white border border-slate-200 rounded-lg shadow-sm text-sm font-medium text-slate-700 hover:border-slate-300">
-            <span>All Columns</span>
-            <svg class="w-5 h-5 text-slate-400" xmlns="http://www.w3.org/2000/svg" viewBox="0 0 20 20" fill="currentColor">
-              <path fill-rule="evenodd" d="M5.293 7.293a1 1 0 011.414 0L10 10.586l3.293-3.293a1 1 0 111.414 1.414l-4 4a1 1 0 01-1.414 0l-4-4a1 1 0 010-1.414z" clip-rule="evenodd" />
-            </svg>
-          </button>
-        </div>
+        <MultiSelect
+          options={searchableColumns}
+          selected={selectedColumns}
+          placeholder="Filter columns"
+          onChange={(cols) => selectedColumns = cols}
+        />
+        
       </div>
     </div>
   </div>
 
   <!-- Table -->
-  <div class="bg-white rounded-2xl shadow-xl shadow-slate-200/40 border border-slate-200/60 overflow-hidden">
-    <div class="overflow-x-auto">
-      <table class="w-full text-left border-separate border-spacing-0">
-        <thead>
-          <tr class="bg-gradient-to-r from-slate-100 to-slate-200/60">
-            <th class="px-4 py-4 text-xs font-bold text-slate-600 uppercase tracking-wide border-b border-slate-200 w-12 text-center">#</th>
-            <th class="px-4 py-4 text-xs font-bold text-slate-600 uppercase tracking-wide border-b border-slate-200 w-20 text-center">Id</th>
-            <th class="px-6 py-4 text-xs font-bold text-slate-700 uppercase tracking-wide border-b border-slate-200 min-w-[150px] text-left">Name</th>
-            <th class="px-6 py-4 text-xs font-bold text-slate-700 uppercase tracking-wide border-b border-slate-200 min-w-[200px] text-left">Email</th>
-            <th class="px-6 py-4 text-xs font-bold text-slate-700 uppercase tracking-wide border-b border-slate-200 text-left">Body</th>
-            <th class="px-4 py-4 text-xs font-bold text-slate-600 uppercase tracking-wide border-b border-slate-200 text-center w-20">Post</th>
-          </tr>
-        </thead>
-        <tbody>
-          <!-- Row 1 -->
-          <tr class="group transition-colors duration-150 align-top bg-white hover:bg-indigo-50/60">
-            <td class="px-6 py-4 text-sm font-medium text-slate-400 group-hover:text-indigo-500 transition-colors text-center">01</td>
-            <td class="px-6 py-4 text-center">
-              <span class="inline-flex items-center justify-center w-8 h-8 rounded-lg bg-slate-100 text-xs font-mono font-bold text-slate-600 group-hover:bg-indigo-100 group-hover:text-indigo-700 transition-colors">1</span>
-            </td>
-            <td class="px-6 py-4"><span class="text-sm font-semibold text-slate-800">id labore ex et quam laborum</span></td>
-            <td class="px-6 py-4"><span class="text-sm text-slate-500 hover:text-indigo-600 transition-colors cursor-pointer">Eliseo@gardner.biz</span></td>
-            <td class="px-6 py-4 max-w-lg">
-              <p class="text-sm text-slate-600 leading-relaxed line-clamp-2">laudantium enim quasi est quidem magnam voluptate ipsam eos tempora quo necessitatibus dolor quam autem quasi</p>
-            </td>
-            <td class="px-6 py-4 text-center">
-              <span class="inline-flex items-center justify-center px-3 py-1.5 rounded-full text-xs font-bold bg-gradient-to-r from-indigo-50 to-purple-50 text-indigo-600 border border-indigo-100">#1</span>
-            </td>
-          </tr>
-          <!-- Row 2 -->
-          <tr class="group transition-colors duration-150 align-top bg-slate-50/50 hover:bg-indigo-50/60">
-            <td class="px-6 py-4 text-sm font-medium text-slate-400 group-hover:text-indigo-500 transition-colors text-center">02</td>
-            <td class="px-6 py-4 text-center">
-              <span class="inline-flex items-center justify-center w-8 h-8 rounded-lg bg-slate-100 text-xs font-mono font-bold text-slate-600 group-hover:bg-indigo-100 group-hover:text-indigo-700 transition-colors">2</span>
-            </td>
-            <td class="px-6 py-4"><span class="text-sm font-semibold text-slate-800">quo vero reiciendis velit similique earum</span></td>
-            <td class="px-6 py-4"><span class="text-sm text-slate-500 hover:text-indigo-600 transition-colors cursor-pointer">Jayne_Kuhic@sydney.com</span></td>
-            <td class="px-6 py-4 max-w-lg">
-              <p class="text-sm text-slate-600 leading-relaxed line-clamp-2">est natus enim nihil est dolore omnis voluptatem numquam et omnis occaecati quod ullam at</p>
-            </td>
-            <td class="px-6 py-4 text-center">
-              <span class="inline-flex items-center justify-center px-3 py-1.5 rounded-full text-xs font-bold bg-gradient-to-r from-indigo-50 to-purple-50 text-indigo-600 border border-indigo-100">#1</span>
-            </td>
-          </tr>
-          <!-- Row 3 -->
-          <tr class="group transition-colors duration-150 align-top bg-white hover:bg-indigo-50/60">
-            <td class="px-6 py-4 text-sm font-medium text-slate-400 group-hover:text-indigo-500 transition-colors text-center">03</td>
-            <td class="px-6 py-4 text-center">
-              <span class="inline-flex items-center justify-center w-8 h-8 rounded-lg bg-slate-100 text-xs font-mono font-bold text-slate-600 group-hover:bg-indigo-100 group-hover:text-indigo-700 transition-colors">3</span>
-            </td>
-            <td class="px-6 py-4"><span class="text-sm font-semibold text-slate-800">odio adipisci rerum aut animi</span></td>
-            <td class="px-6 py-4"><span class="text-sm text-slate-500 hover:text-indigo-600 transition-colors cursor-pointer">Nikita@garfield.biz</span></td>
-            <td class="px-6 py-4 max-w-lg">
-              <p class="text-sm text-slate-600 leading-relaxed line-clamp-2">quia molestiae reprehenderit quasi aspernatur aut expedita occaecati aliquam eveniet laudantium</p>
-            </td>
-            <td class="px-6 py-4 text-center">
-              <span class="inline-flex items-center justify-center px-3 py-1.5 rounded-full text-xs font-bold bg-gradient-to-r from-indigo-50 to-purple-50 text-indigo-600 border border-indigo-100">#1</span>
-            </td>
-          </tr>
-          <!-- Row 4 -->
-          <tr class="group transition-colors duration-150 align-top bg-slate-50/50 hover:bg-indigo-50/60">
-            <td class="px-6 py-4 text-sm font-medium text-slate-400 group-hover:text-indigo-500 transition-colors text-center">04</td>
-            <td class="px-6 py-4 text-center">
-              <span class="inline-flex items-center justify-center w-8 h-8 rounded-lg bg-slate-100 text-xs font-mono font-bold text-slate-600 group-hover:bg-indigo-100 group-hover:text-indigo-700 transition-colors">4</span>
-            </td>
-            <td class="px-6 py-4"><span class="text-sm font-semibold text-slate-800">alias odio sit</span></td>
-            <td class="px-6 py-4"><span class="text-sm text-slate-500 hover:text-indigo-600 transition-colors cursor-pointer">Lew@alysha.tv</span></td>
-            <td class="px-6 py-4 max-w-lg">
-              <p class="text-sm text-slate-600 leading-relaxed line-clamp-2">non et atque occaecati deserunt quas accusantium unde odit nobis qui voluptatem</p>
-            </td>
-            <td class="px-6 py-4 text-center">
-              <span class="inline-flex items-center justify-center px-3 py-1.5 rounded-full text-xs font-bold bg-gradient-to-r from-indigo-50 to-purple-50 text-indigo-600 border border-indigo-100">#1</span>
-            </td>
-          </tr>
-          <!-- Row 5 -->
-          <tr class="group transition-colors duration-150 align-top bg-white hover:bg-indigo-50/60">
-            <td class="px-6 py-4 text-sm font-medium text-slate-400 group-hover:text-indigo-500 transition-colors text-center">05</td>
-            <td class="px-6 py-4 text-center">
-              <span class="inline-flex items-center justify-center w-8 h-8 rounded-lg bg-slate-100 text-xs font-mono font-bold text-slate-600 group-hover:bg-indigo-100 group-hover:text-indigo-700 transition-colors">5</span>
-            </td>
-            <td class="px-6 py-4"><span class="text-sm font-semibold text-slate-800">vero eaque aliquid doloribus et culpa</span></td>
-            <td class="px-6 py-4"><span class="text-sm text-slate-500 hover:text-indigo-600 transition-colors cursor-pointer">Hayden@althea.biz</span></td>
-            <td class="px-6 py-4 max-w-lg">
-              <p class="text-sm text-slate-600 leading-relaxed line-clamp-2">harum non quasi et ratione tempore iure ex voluptates in ratione</p>
-            </td>
-            <td class="px-6 py-4 text-center">
-              <span class="inline-flex items-center justify-center px-3 py-1.5 rounded-full text-xs font-bold bg-gradient-to-r from-indigo-50 to-purple-50 text-indigo-600 border border-indigo-100">#1</span>
-            </td>
-          </tr>
-          <!-- Row 6 -->
-          <tr class="group transition-colors duration-150 align-top bg-slate-50/50 hover:bg-indigo-50/60">
-            <td class="px-6 py-4 text-sm font-medium text-slate-400 group-hover:text-indigo-500 transition-colors text-center">06</td>
-            <td class="px-6 py-4 text-center">
-              <span class="inline-flex items-center justify-center w-8 h-8 rounded-lg bg-slate-100 text-xs font-mono font-bold text-slate-600 group-hover:bg-indigo-100 group-hover:text-indigo-700 transition-colors">6</span>
-            </td>
-            <td class="px-6 py-4"><span class="text-sm font-semibold text-slate-800">et fugit eligendi deleniti quidem</span></td>
-            <td class="px-6 py-4"><span class="text-sm text-slate-500 hover:text-indigo-600 transition-colors cursor-pointer">Presley.Mueller@myrl.com</span></td>
-            <td class="px-6 py-4 max-w-lg">
-              <p class="text-sm text-slate-600 leading-relaxed line-clamp-2">doloribus at sed quis culpa deserunt consectetur qui praesentium accusamus fugiat dicta</p>
-            </td>
-            <td class="px-6 py-4 text-center">
-              <span class="inline-flex items-center justify-center px-3 py-1.5 rounded-full text-xs font-bold bg-gradient-to-r from-indigo-50 to-purple-50 text-indigo-600 border border-indigo-100">#2</span>
-            </td>
-          </tr>
-          <!-- Row 7 -->
-          <tr class="group transition-colors duration-150 align-top bg-white hover:bg-indigo-50/60">
-            <td class="px-6 py-4 text-sm font-medium text-slate-400 group-hover:text-indigo-500 transition-colors text-center">07</td>
-            <td class="px-6 py-4 text-center">
-              <span class="inline-flex items-center justify-center w-8 h-8 rounded-lg bg-slate-100 text-xs font-mono font-bold text-slate-600 group-hover:bg-indigo-100 group-hover:text-indigo-700 transition-colors">7</span>
-            </td>
-            <td class="px-6 py-4"><span class="text-sm font-semibold text-slate-800">repellat consequatur praesentium</span></td>
-            <td class="px-6 py-4"><span class="text-sm text-slate-500 hover:text-indigo-600 transition-colors cursor-pointer">Dallas@ole.me</span></td>
-            <td class="px-6 py-4 max-w-lg">
-              <p class="text-sm text-slate-600 leading-relaxed line-clamp-2">maiores sed dolores similique labore et inventore et quasi temporibus esse sunt id et eos voluptatem</p>
-            </td>
-            <td class="px-6 py-4 text-center">
-              <span class="inline-flex items-center justify-center px-3 py-1.5 rounded-full text-xs font-bold bg-gradient-to-r from-indigo-50 to-purple-50 text-indigo-600 border border-indigo-100">#2</span>
-            </td>
-          </tr>
-          <!-- Row 8 -->
-          <tr class="group transition-colors duration-150 align-top bg-slate-50/50 hover:bg-indigo-50/60">
-            <td class="px-6 py-4 text-sm font-medium text-slate-400 group-hover:text-indigo-500 transition-colors text-center">08</td>
-            <td class="px-6 py-4 text-center">
-              <span class="inline-flex items-center justify-center w-8 h-8 rounded-lg bg-slate-100 text-xs font-mono font-bold text-slate-600 group-hover:bg-indigo-100 group-hover:text-indigo-700 transition-colors">8</span>
-            </td>
-            <td class="px-6 py-4"><span class="text-sm font-semibold text-slate-800">et omnis dolorem</span></td>
-            <td class="px-6 py-4"><span class="text-sm text-slate-500 hover:text-indigo-600 transition-colors cursor-pointer">Mallory_Kunze@marie.org</span></td>
-            <td class="px-6 py-4 max-w-lg">
-              <p class="text-sm text-slate-600 leading-relaxed line-clamp-2">ut voluptatem corrupti velit ad voluptatem maiores</p>
-            </td>
-            <td class="px-6 py-4 text-center">
-              <span class="inline-flex items-center justify-center px-3 py-1.5 rounded-full text-xs font-bold bg-gradient-to-r from-indigo-50 to-purple-50 text-indigo-600 border border-indigo-100">#2</span>
-            </td>
-          </tr>
-        </tbody>
-      </table>
-    </div>
-  </div>
+  <Table data={results?.data} isLoading={results?.loading} searchTerm={debouncedSearchTerm.value} />
 
   <!-- Pagination -->
   <div class="mt-4 flex items-center justify-between bg-white p-3 rounded-2xl border border-slate-100 shadow-lg shadow-slate-200/30">
-    <button disabled class="inline-flex items-center justify-center min-w-[40px] h-[40px] px-4 text-base font-semibold rounded-lg opacity-40 cursor-not-allowed bg-transparent text-slate-400">
-      <span class="text-lg">←</span> Previous
-    </button>
+  
+  <!-- Previous Button -->
+  <button
+    onclick={() => canPrev && goTo(current - 1)}
+    disabled={!canPrev}
+    class="{btnBase} {arrowBtn} {canPrev ? btnInactive : btnDisabled}"
+  >
+    <span class="text-lg">←</span> Previous
+  </button>
 
-    <div class="flex items-center gap-1.5">
-      <button class="inline-flex items-center justify-center min-w-[40px] h-[40px] text-base font-semibold rounded-lg bg-transparent text-indigo-600 border-2 border-indigo-500 shadow-lg shadow-indigo-500/30 font-extrabold">1</button>
-      <button class="inline-flex items-center justify-center min-w-[40px] h-[40px] text-base font-semibold rounded-lg bg-white border border-slate-200 text-slate-600 hover:border-slate-300 hover:text-slate-800">2</button>
-      <button class="inline-flex items-center justify-center min-w-[40px] h-[40px] text-base font-semibold rounded-lg bg-white border border-slate-200 text-slate-600 hover:border-slate-300 hover:text-slate-800">3</button>
-      <button class="inline-flex items-center justify-center min-w-[40px] h-[40px] text-base font-semibold rounded-lg bg-white border border-slate-200 text-slate-600 hover:border-slate-300 hover:text-slate-800">4</button>
-      <button class="inline-flex items-center justify-center min-w-[40px] h-[40px] text-base font-semibold rounded-lg bg-white border border-slate-200 text-slate-600 hover:border-slate-300 hover:text-slate-800">5</button>
-      <span class="px-2 text-slate-300 font-bold">···</span>
-      <button class="inline-flex items-center justify-center min-w-[40px] h-[40px] text-base font-semibold rounded-lg bg-white border border-slate-200 text-slate-600 hover:border-slate-300 hover:text-slate-800">63</button>
-    </div>
+  <!-- Page Numbers -->
+  <div class="flex items-center gap-1.5">
+    {#if paginationPages.start > 1}
+      <button onclick={() => goTo(1)} class="{btnBase} {btnInactive}">1</button>
+      {#if paginationPages.start > 2}
+        <span class="px-2 text-slate-300 font-bold">···</span>
+      {/if}
+    {/if}
 
-    <button class="inline-flex items-center justify-center min-w-[40px] h-[40px] px-4 text-base font-semibold transition-all duration-200 rounded-lg bg-white border border-slate-200 text-slate-600 hover:border-slate-300 hover:text-slate-800">
-      Next <span class="text-lg">→</span>
-    </button>
+    {#each paginationPages.pages as p}
+      <button
+        onclick={() => goTo(p)}
+        class="{btnBase} {p === current ? btnActive : btnInactive}"
+        aria-current={p === current ? 'page' : undefined}
+      >
+        {p}
+      </button>
+    {/each}
+
+    {#if paginationPages.end < total}
+      {#if paginationPages.end < total - 1}
+        <span class="px-2 text-slate-300 font-bold">···</span>
+      {/if}
+      <button onclick={() => goTo(total)} class="{btnBase} {btnInactive}">
+        {total}
+      </button>
+    {/if}
   </div>
 
+  <!-- Next Button -->
+  <button
+    onclick={() => canNext && goTo(current + 1)}
+    disabled={!canNext}
+    class="{btnBase} {arrowBtn} {canNext ? btnInactive : btnDisabled}"
+  >
+    Next <span class="text-lg">→</span>
+  </button>
+
+</div>
 </div>

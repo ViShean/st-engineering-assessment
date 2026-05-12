@@ -12,21 +12,20 @@ export function createComments(
 
 
     $effect(() => {
-        const load = async () => {
-            const columnsKey = getColumns().join(",");
+        // Read all reactive getters synchronously so Svelte tracks them as dependencies
+        const currentPage = getPage();
+        const currentQ = getQ?.();
+        const currentCols = getColumns();
 
+        const load = async () => {
             loading = true;
             try {
-                const cols = columnsKey ? columnsKey.split(",") : [];
-                const result = await fetchComments(
-                    getPage(), 
-                    getQ?.(), 
-                    cols);
+                const result = await fetchComments(currentPage, currentQ, currentCols);
                 data = result.data;
                 meta = result.meta;
             } finally {
                 loading = false;
-            }   
+            }
         };
         load();
     })
